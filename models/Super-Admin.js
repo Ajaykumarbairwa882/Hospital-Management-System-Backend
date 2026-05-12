@@ -32,10 +32,14 @@ const superAdminSchema = new mongoose.Schema(
       type: String,
       default: "superadmin",
     },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 const SuperAdmin = mongoose.model("SuperAdmin", superAdminSchema);

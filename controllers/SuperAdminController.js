@@ -3,11 +3,13 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import SuperAdmin from "../models/Super-Admin.js";
 import User from "../models/UserModel.js";
+import Hospital from "../models/Hospital Model/hospitalModel.js";
+import { v4 as uuidv4 } from "uuid";
+import { sendHospitalMail } from "../utils/mailService.js";
 
 export const createAdmin = async (req, res) => {
   try {
-    const { name, email, password, phone, bg_description, gender } =
-      req.body;
+    const { name, email, password, phone, bg_description, gender } = req.body;
 
     console.log(">>>>>>>>>>>>", req.body);
 
@@ -108,6 +110,63 @@ export const updateAdminInfo = async (req, res) => {
       success: true,
       message: "Super admin updated",
       admin,
+      user,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+export const approveHospital = async (req, res) => {
+  try {
+    const hospital = await Hospital.findById(req.params.id);
+
+    if (!hospital) {
+      return res.status(404).json({
+        success: false,
+        message: "Hospital not found",
+      });
+    }
+
+    hospital.status = "approved";
+
+    await hospital.save();
+
+    const rawPassword = uuidv4().slice(0, 8);
+    console.log(">>>>>>>>rowpassword ", rawPassword);
+
+    const hashedPassword = await bcrypt.hash(rawPassword, 10);
+
+    const user = await User.create({
+      name: hospital.ownerName,
+
+      email: hospital.email,
+
+      phone: hospital.phone,
+
+      password: hashedPassword,
+
+      role: "hospital",
+
+      status: "approved",
+    });
+
+    hospital.createdBy = user._id;
+
+    await hospital.save();
+
+    await sendHospitalMail(
+      hospital.email,
+      hospital.hospitalName,
+      rawPassword,
+      "approved",
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Hospital approved",
       user,
     });
   } catch (error) {

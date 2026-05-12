@@ -5,6 +5,7 @@ import cors from "cors";
 import adminrouter from "./routes/SuperAdmin.js";
 import locationRouter from "./routes/locationRoute.js";
 import UserRoute from "./routes/UserRoute.js";
+import hospitalrouter from "./routes/HospitalRoute.js";
 
 dotenv.config();
 
@@ -19,6 +20,7 @@ app.use(express.json());
 app.use("/admin", adminrouter);
 app.use("/locations", locationRouter);
 app.use("/user", UserRoute);
+app.use("/hospital",hospitalrouter)
 
 mongoose
   .connect(MONGODB_URI)

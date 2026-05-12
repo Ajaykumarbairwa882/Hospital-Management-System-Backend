@@ -2,10 +2,11 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import User from "../models/UserModel.js";
+import { sendUserUpdateEmail, sendWelcomeEmail} from "../utils/mailService.js";
 
 export const signup = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password,role } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ success: false, message: "All fields are required" });
@@ -32,6 +33,7 @@ export const signup = async (req, res) => {
       { expiresIn: "7d" }
     );
 
+    await sendWelcomeEmail(email, name, password, role)
     return res.status(201).json({
       success: true,
       message: "Signup successful",
@@ -182,12 +184,21 @@ export const getUser = async (req, res) => {
 
 export const updateUser = async (req, res) => {
   try {
-    const { name, email, status } = req.body;
+    const { name, email, status, phone } = req.body;
 
+    // user update
     const user = await User.findByIdAndUpdate(
       req.params.id,
-      { name, email, status },
-      { new: true, runValidators: true }
+      {
+        name,
+        email,
+        status,
+        phone,
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
     );
 
     if (!user) {
@@ -197,11 +208,62 @@ export const updateUser = async (req, res) => {
       });
     }
 
+    // =========================
+    // ROLE BASED MODEL UPDATE
+    // =========================
+
+    const updateData = {
+      name,
+      email,
+      phone,
+      status,
+    };
+
+    // ADMIN
+    if (user.role === "admin") {
+      await Admin.findOneAndUpdate(
+        { userId: user._id },
+        updateData,
+        { new: true }
+      );
+    }
+
+    // HOSPITAL
+    if (user.role === "hospital") {
+      await Hospital.findOneAndUpdate(
+        { userId: user._id },
+        updateData,
+        { new: true }
+      );
+    }
+
+    // DOCTOR
+    if (user.role === "doctor") {
+      await Doctor.findOneAndUpdate(
+        { userId: user._id },
+        updateData,
+        { new: true }
+      );
+    }
+
+    // PATIENT
+    if (user.role === "patient") {
+      await Patient.findOneAndUpdate(
+        { userId: user._id },
+        updateData,
+        { new: true }
+      );
+    }
+
+    // email
+    await sendUserUpdateEmail(user.email, user.name);
+
     return res.status(200).json({
       success: true,
-      message: "User updated",
+      message: "User updated successfully",
       user,
     });
+
   } catch (error) {
     return res.status(500).json({
       success: false,
@@ -209,7 +271,6 @@ export const updateUser = async (req, res) => {
     });
   }
 };
-
 export const deleteUser = async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
@@ -233,3 +294,4 @@ export const deleteUser = async (req, res) => {
     });
   }
 };
+ 
