@@ -120,27 +120,47 @@ export const updateAdminInfo = async (req, res) => {
   }
 };
 export const approveHospital = async (req, res) => {
+
   try {
-    const hospital = await Hospital.findById(req.params.id);
+
+    const hospital = await Hospital.findById(req.params.id || req.body.id);
 
     if (!hospital) {
+
       return res.status(404).json({
         success: false,
         message: "Hospital not found",
       });
     }
 
-    hospital.status = "approved";
+    // ALREADY APPROVED CHECK
+    if (hospital.status === "approved") {
 
-    await hospital.save();
+      return res.status(400).json({
+        success: false,
+        message: "Hospital already approved",
+      });
+    }
 
+    // GENERATE PASSWORD
     const rawPassword = uuidv4().slice(0, 8);
-    console.log(">>>>>>>>rowpassword ", rawPassword);
 
-    const hashedPassword = await bcrypt.hash(rawPassword, 10);
+    console.log(
+      "Generated Password:",
+      rawPassword
+    );
 
+    // HASH PASSWORD
+    const hashedPassword = await bcrypt.hash(
+      rawPassword,
+      10
+    );
+
+    // CREATE USER
     const user = await User.create({
-      name: hospital.ownerName,
+
+      // IMPORTANT
+      name: hospital.name,
 
       email: hospital.email,
 
@@ -150,13 +170,17 @@ export const approveHospital = async (req, res) => {
 
       role: "hospital",
 
-      status: "approved",
+      status: "active",
     });
+
+    // UPDATE HOSPITAL
+    hospital.status = "approved";
 
     hospital.createdBy = user._id;
 
     await hospital.save();
 
+    // SEND MAIL
     await sendHospitalMail(
       hospital.email,
       hospital.hospitalName,
@@ -165,14 +189,22 @@ export const approveHospital = async (req, res) => {
     );
 
     return res.status(200).json({
+
       success: true,
-      message: "Hospital approved",
+
+      message: "Hospital approved successfully",
+
       user,
     });
+
   } catch (error) {
+
     return res.status(500).json({
+
       success: false,
+
       message: error.message,
     });
+
   }
 };

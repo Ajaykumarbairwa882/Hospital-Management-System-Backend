@@ -38,8 +38,13 @@ const hospitalSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    city:{
+      type:mongoose.Schema.Types.ObjectId,
+      ref:"City",
+      required:true
+    }
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const Hospital = mongoose.model("Hospital", hospitalSchema);

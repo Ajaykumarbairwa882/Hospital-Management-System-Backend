@@ -6,7 +6,12 @@ export const createDistrict = async (req, res) => {
     const { districtName, state } = req.body;
 
     if (!districtName || !state) {
-      return res.status(400).json({ success: false, message: "District name and state are required" });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "District name and state are required",
+        });
     }
 
     const district = await District.create({
@@ -16,7 +21,9 @@ export const createDistrict = async (req, res) => {
 
     await district.populate("state");
 
-    return res.status(201).json({ success: true, message: "District created", district });
+    return res
+      .status(201)
+      .json({ success: true, message: "District created", district });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -24,7 +31,17 @@ export const createDistrict = async (req, res) => {
 
 export const getAllDistricts = async (req, res) => {
   try {
-    const districts = await District.find().populate("state").sort({ createdAt: -1 });
+    const filter = {
+      status: "active",
+    };
+
+    if (req.params.stateId) {
+      filter.state = req.params.stateId;
+    }
+
+    const districts = await District.find(filter)
+      .populate("state")
+      .sort({ createdAt: -1 });
     return res.status(200).json({ success: true, districts });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -36,14 +53,18 @@ export const updateDistrictStatus = async (req, res) => {
     const district = await District.findByIdAndUpdate(
       req.params.id,
       { status: req.body.status },
-      { new: true }
+      { new: true },
     );
 
     if (!district) {
-      return res.status(404).json({ success: false, message: "District not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "District not found" });
     }
 
-    return res.status(200).json({ success: true, message: "District updated", district });
+    return res
+      .status(200)
+      .json({ success: true, message: "District updated", district });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -54,20 +75,29 @@ export const updateDistrict = async (req, res) => {
     const { districtName, state } = req.body;
 
     if (!districtName || !state) {
-      return res.status(400).json({ success: false, message: "District name and state are required" });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "District name and state are required",
+        });
     }
 
     const district = await District.findByIdAndUpdate(
       req.params.id,
       { districtName, state },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     ).populate("state");
 
     if (!district) {
-      return res.status(404).json({ success: false, message: "District not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "District not found" });
     }
 
-    return res.status(200).json({ success: true, message: "District updated", district });
+    return res
+      .status(200)
+      .json({ success: true, message: "District updated", district });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -78,7 +108,9 @@ export const deleteDistrict = async (req, res) => {
     const district = await District.findByIdAndDelete(req.params.id);
 
     if (!district) {
-      return res.status(404).json({ success: false, message: "District not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "District not found" });
     }
 
     await City.deleteMany({ district: district._id });

@@ -7,7 +7,9 @@ export const createState = async (req, res) => {
     const { stateName, country } = req.body;
 
     if (!stateName) {
-      return res.status(400).json({ success: false, message: "State name is required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "State name is required" });
     }
 
     const state = await State.create({
@@ -15,7 +17,9 @@ export const createState = async (req, res) => {
       country: country || "India",
     });
 
-    return res.status(201).json({ success: true, message: "State created", state });
+    return res
+      .status(201)
+      .json({ success: true, message: "State created", state });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -23,7 +27,9 @@ export const createState = async (req, res) => {
 
 export const getAllStates = async (req, res) => {
   try {
-    const states = await State.find().sort({ createdAt: -1 });
+    const states = await State.find({
+      status: "active",
+    }).sort({ createdAt: -1 });
     return res.status(200).json({ success: true, states });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -35,14 +41,18 @@ export const updateStateStatus = async (req, res) => {
     const state = await State.findByIdAndUpdate(
       req.params.id,
       { status: req.body.status },
-      { new: true }
+      { new: true },
     );
 
     if (!state) {
-      return res.status(404).json({ success: false, message: "State not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "State not found" });
     }
 
-    return res.status(200).json({ success: true, message: "State updated", state });
+    return res
+      .status(200)
+      .json({ success: true, message: "State updated", state });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -53,20 +63,26 @@ export const updateState = async (req, res) => {
     const { stateName, country } = req.body;
 
     if (!stateName) {
-      return res.status(400).json({ success: false, message: "State name is required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "State name is required" });
     }
 
     const state = await State.findByIdAndUpdate(
       req.params.id,
       { stateName, country: country || "India" },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!state) {
-      return res.status(404).json({ success: false, message: "State not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "State not found" });
     }
 
-    return res.status(200).json({ success: true, message: "State updated", state });
+    return res
+      .status(200)
+      .json({ success: true, message: "State updated", state });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -77,7 +93,9 @@ export const deleteState = async (req, res) => {
     const state = await State.findByIdAndDelete(req.params.id);
 
     if (!state) {
-      return res.status(404).json({ success: false, message: "State not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "State not found" });
     }
 
     const districts = await District.find({ state: state._id });

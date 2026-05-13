@@ -1,4 +1,5 @@
 import Hospital from "../models/Hospital Model/hospitalModel.js";
+import City from "../models/cityModel.js";
 import User from "../models/UserModel.js";
 import bcrypt from "bcrypt";
 import { v4 as uuidv4 } from "uuid";
@@ -7,7 +8,14 @@ import { sendHospitalMail } from "../utils/mailService.js";
 
 export const createHospital = async (req, res) => {
   try {
-    const { hospitalName, ownerName, email, phone, address } = req.body;
+    const { hospitalName, name, email, phone, address, city } = req.body;
+
+    if (!hospitalName || !name || !email || !phone || !address || !city) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+      });
+    }
 
     const existingHospital = await Hospital.findOne({ email });
 
@@ -18,13 +26,43 @@ export const createHospital = async (req, res) => {
       });
     }
 
+    const selectedCity = await City.findById(city).populate({
+      path: "district",
+      populate: {
+        path: "state",
+      },
+    });
+
+    if (
+      !selectedCity ||
+      selectedCity.status !== "active" ||
+      selectedCity.district?.status !== "active" ||
+      selectedCity.district?.state?.status !== "active"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Please select a valid location",
+      });
+    }
+
     const hospital = await Hospital.create({
       hospitalName,
-      ownerName,
+      name,
       email,
       phone,
       address,
+      city,
       status: "pending",
+    });
+
+    await hospital.populate({
+      path: "city",
+      populate: {
+        path: "district",
+        populate: {
+          path: "state",
+        },
+      },
     });
 
     await sendHospitalMail(email, hospitalName, "", "pending");
@@ -44,7 +82,15 @@ export const createHospital = async (req, res) => {
 
 export const getAllHospitals = async (req, res) => {
   try {
-    const hospitals = await Hospital.find();
+    const hospitals = await Hospital.find().populate({
+      path: "city",
+      populate: {
+        path: "district",
+        populate: {
+          path: "state",
+        },
+      },
+    });
 
     return res.status(200).json({
       success: true,
@@ -61,7 +107,15 @@ export const getAllHospitals = async (req, res) => {
 
 export const getSingleHospital = async (req, res) => {
   try {
-    const hospital = await Hospital.findById(req.params.id);
+    const hospital = await Hospital.findById(req.params.id).populate({
+      path: "city",
+      populate: {
+        path: "district",
+        populate: {
+          path: "state",
+        },
+      },
+    });
 
     if (!hospital) {
       return res.status(404).json({
@@ -109,13 +163,15 @@ export const updateHospitalStatus = async (req, res) => {
         email: hospital.email,
       });
 
-      if (!existingUser) {
+      if (existingUser) {
+        hospital.createdBy = existingUser._id;
+      } else {
         const rawPassword = uuidv4().slice(0, 8);
 
         const hashedPassword = await bcrypt.hash(rawPassword, 10);
 
         const user = await User.create({
-          name: hospital.ownerName,
+          name: hospital.name,
 
           email: hospital.email,
 
@@ -125,7 +181,7 @@ export const updateHospitalStatus = async (req, res) => {
 
           role: "hospital",
 
-          status: "approved",
+          status: "active",
         });
 
         hospital.createdBy = user._id;

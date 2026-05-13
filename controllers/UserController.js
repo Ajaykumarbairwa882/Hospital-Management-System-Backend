@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import User from "../models/UserModel.js";
+import Hospital from "../models/Hospital Model/hospitalModel.js";
 import { sendUserUpdateEmail, sendWelcomeEmail} from "../utils/mailService.js";
 
 export const signup = async (req, res) => {
@@ -208,49 +209,14 @@ export const updateUser = async (req, res) => {
       });
     }
 
-    // =========================
-    // ROLE BASED MODEL UPDATE
-    // =========================
-
-    const updateData = {
-      name,
-      email,
-      phone,
-      status,
-    };
-
-    // ADMIN
-    if (user.role === "admin") {
-      await Admin.findOneAndUpdate(
-        { userId: user._id },
-        updateData,
-        { new: true }
-      );
-    }
-
-    // HOSPITAL
     if (user.role === "hospital") {
       await Hospital.findOneAndUpdate(
-        { userId: user._id },
-        updateData,
-        { new: true }
-      );
-    }
-
-    // DOCTOR
-    if (user.role === "doctor") {
-      await Doctor.findOneAndUpdate(
-        { userId: user._id },
-        updateData,
-        { new: true }
-      );
-    }
-
-    // PATIENT
-    if (user.role === "patient") {
-      await Patient.findOneAndUpdate(
-        { userId: user._id },
-        updateData,
+        { createdBy: user._id },
+        {
+          name,
+          email,
+          phone,
+        },
         { new: true }
       );
     }
