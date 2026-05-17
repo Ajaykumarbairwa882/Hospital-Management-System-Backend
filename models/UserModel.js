@@ -17,6 +17,14 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    profileImage: {
+      type: String,
+      default: "",
+    },
+    backgroundImage: {
+      type: String,
+      default: "",
+    },
 
     password: {
       type: String,
@@ -25,7 +33,7 @@ const userSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["user", "superadmin", "hospital"],
+      enum: ["user", "superadmin", "hospital", "doctor"],
       default: "user",
     },
     superAdmin: {
@@ -49,7 +57,7 @@ const userSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 const User = mongoose.model("User", userSchema);

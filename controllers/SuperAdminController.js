@@ -120,13 +120,10 @@ export const updateAdminInfo = async (req, res) => {
   }
 };
 export const approveHospital = async (req, res) => {
-
   try {
-
     const hospital = await Hospital.findById(req.params.id || req.body.id);
 
     if (!hospital) {
-
       return res.status(404).json({
         success: false,
         message: "Hospital not found",
@@ -135,7 +132,6 @@ export const approveHospital = async (req, res) => {
 
     // ALREADY APPROVED CHECK
     if (hospital.status === "approved") {
-
       return res.status(400).json({
         success: false,
         message: "Hospital already approved",
@@ -145,20 +141,13 @@ export const approveHospital = async (req, res) => {
     // GENERATE PASSWORD
     const rawPassword = uuidv4().slice(0, 8);
 
-    console.log(
-      "Generated Password:",
-      rawPassword
-    );
+    console.log("Generated Password:", rawPassword);
 
     // HASH PASSWORD
-    const hashedPassword = await bcrypt.hash(
-      rawPassword,
-      10
-    );
+    const hashedPassword = await bcrypt.hash(rawPassword, 10);
 
     // CREATE USER
     const user = await User.create({
-
       // IMPORTANT
       name: hospital.name,
 
@@ -189,22 +178,17 @@ export const approveHospital = async (req, res) => {
     );
 
     return res.status(200).json({
-
       success: true,
 
       message: "Hospital approved successfully",
 
       user,
     });
-
   } catch (error) {
-
     return res.status(500).json({
-
       success: false,
 
       message: error.message,
     });
-
   }
 };

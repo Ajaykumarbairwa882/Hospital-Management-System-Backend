@@ -1,14 +1,19 @@
 import Hospital from "../models/Hospital Model/hospitalModel.js";
+import HospitalImage from "../models/hospitalImageModel.js";
 import City from "../models/cityModel.js";
 import User from "../models/UserModel.js";
 import bcrypt from "bcrypt";
 import { v4 as uuidv4 } from "uuid";
 
 import { sendHospitalMail } from "../utils/mailService.js";
+import { uploadImage } from "../utils/cloudinary.js";
 
 export const createHospital = async (req, res) => {
+  let createdHospital = null;
+
   try {
-    const { hospitalName, name, email, phone, address, city } = req.body;
+    const { hospitalName, name, email, phone, address, city, images = [] } =
+      req.body;
 
     if (!hospitalName || !name || !email || !phone || !address || !city) {
       return res.status(400).json({
@@ -45,7 +50,7 @@ export const createHospital = async (req, res) => {
       });
     }
 
-    const hospital = await Hospital.create({
+    createdHospital = await Hospital.create({
       hospitalName,
       name,
       email,
@@ -55,7 +60,31 @@ export const createHospital = async (req, res) => {
       status: "pending",
     });
 
-    await hospital.populate({
+    const imageDocs = [];
+
+    for (const item of images) {
+      if (!item?.name || !item?.image) {
+        continue;
+      }
+
+      const upload = await uploadImage(item.image, "hms/hospitals");
+
+      if (!upload.success) {
+        throw new Error(upload.message || "Hospital image upload failed");
+      }
+
+      imageDocs.push({
+        hospitalId: createdHospital._id,
+        name: item.name.trim(),
+        image: upload.url,
+      });
+    }
+
+    if (imageDocs.length > 0) {
+      await HospitalImage.create(imageDocs);
+    }
+
+    await createdHospital.populate({
       path: "city",
       populate: {
         path: "district",
@@ -70,7 +99,7 @@ export const createHospital = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Hospital request submitted",
-      hospital,
+      hospital: createdHospital,
     });
   } catch (error) {
     return res.status(500).json({
@@ -90,7 +119,8 @@ export const getAllHospitals = async (req, res) => {
           path: "state",
         },
       },
-    });
+    }).populate()
+    
 
     return res.status(200).json({
       success: true,
@@ -99,6 +129,22 @@ export const getAllHospitals = async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const getAllHospitalImages = async (req, res) => {
+  try {
+    const images = await HospitalImage.find();
+
+    res.json({
+      success: true,
+      images,
+    });
+  } catch (error) {
+    res.status(500).json({
       success: false,
       message: error.message,
     });
@@ -124,9 +170,16 @@ export const getSingleHospital = async (req, res) => {
       });
     }
 
+    const images = await HospitalImage.find({ hospitalId: hospital._id }).sort({
+      createdAt: -1,
+    });
+
     return res.status(200).json({
       success: true,
-      hospital,
+      hospital: {
+        ...hospital.toObject(),
+        images,
+      },
     });
   } catch (error) {
     return res.status(500).json({

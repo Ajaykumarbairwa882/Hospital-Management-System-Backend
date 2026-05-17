@@ -1,6 +1,11 @@
 import Doctor from "../models/doctorModel.js";
+import DoctorImage from "../models/doctorImageModel.js";
 import Hospital from "../models/Hospital Model/hospitalModel.js";
 import User from "../models/UserModel.js";
+import bcrypt from "bcrypt";
+import { v4 as uuidv4 } from "uuid";
+import { sendDoctorCredentialEmail } from "../utils/mailService.js";
+import { uploadImage } from "../utils/cloudinary.js";
 
 const getHospitalByUser = async (userId) => {
   let hospital = await Hospital.findOne({ createdBy: userId });
@@ -19,10 +24,18 @@ const getHospitalByUser = async (userId) => {
 };
 
 const populateDoctor = (query) => {
-  return query.populate("hospital").populate("department").populate("subDepartment");
+  return query
+    .populate("hospital")
+    .populate("department")
+    .populate("subDepartment");
 };
 
 export const createDoctor = async (req, res) => {
+  let createdDoctor = null;
+  let doctorEmail = "";
+  let doctorNameForMail = "";
+  let plainPassword = "";
+
   try {
     const {
       doctorName,
@@ -34,30 +47,44 @@ export const createDoctor = async (req, res) => {
       subDepartment,
       hospital,
       hospitalUser,
+      images = [],
     } = req.body;
 
-    if (!doctorName) {
+    const selectedHospital = hospital
+      ? await Hospital.findById(hospital)
+      : await getHospitalByUser(hospitalUser);
+
+    if (!doctorName || !email || !selectedHospital) {
       return res.status(400).json({
         success: false,
-        message: "Doctor name is required",
+        message: "Required fields missing",
       });
     }
 
-    let hospitalId = hospital;
+    const existingUser = await User.findOne({ email });
 
-    if (!hospitalId && hospitalUser) {
-      const hospitalData = await getHospitalByUser(hospitalUser);
-      hospitalId = hospitalData?._id;
-    }
-
-    if (!hospitalId) {
+    if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: "Hospital is required",
+        message: "User already exists",
       });
     }
 
-    const doctor = await Doctor.create({
+    plainPassword = uuidv4().split("-")[0];
+    const hashedpass = await bcrypt.hash(plainPassword, 10);
+    doctorEmail = email;
+    doctorNameForMail = doctorName;
+
+    const user = await User.create({
+      name: doctorName,
+      email,
+      phone: phone || "",
+      password: hashedpass,
+      role: "doctor",
+      status: "active",
+    });
+
+    createdDoctor = await Doctor.create({
       doctorName,
       email,
       phone,
@@ -65,25 +92,60 @@ export const createDoctor = async (req, res) => {
       specialization,
       department: department || null,
       subDepartment: subDepartment || null,
-      hospital: hospitalId,
-      status: "active",
-      isDeleted: false,
+      hospital: selectedHospital._id,
+      userId: user._id,
     });
 
-    await doctor.populate("hospital");
-    await doctor.populate("department");
-    await doctor.populate("subDepartment");
+    const imageDocs = [];
+
+    for (const item of images) {
+      if (!item?.name || !item?.image) {
+        continue;
+      }
+
+      const upload = await uploadImage(item.image, "hms/doctors");
+
+      if (!upload.success) {
+        throw new Error(upload.message || "Doctor image upload failed");
+      }
+
+      imageDocs.push({
+        doctorId: createdDoctor._id,
+        name: item.name.trim(),
+        image: upload.url,
+      });
+    }
+
+    if (imageDocs.length > 0) {
+      await DoctorImage.create(imageDocs);
+    }
+
+    await sendDoctorCredentialEmail(
+      doctorEmail,
+      doctorNameForMail,
+      plainPassword,
+    );
+
+    console.log(email);
+    console.log(plainPassword);
 
     return res.status(201).json({
       success: true,
-      message: "Doctor created",
-      doctor,
+      message: "Doctor & User created successfully",
+      doctor: createdDoctor,
+      login: {
+        email,
+        password: plainPassword,
+      },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+      // message:console.log(">>>>>>>>>>>>>>>>>")
+    });
   }
 };
-
 export const getAllDoctors = async (req, res) => {
   try {
     const filter = { isDeleted: false };
@@ -97,20 +159,47 @@ export const getAllDoctors = async (req, res) => {
       filter.hospital = hospital?._id;
     }
 
-    const doctors = await populateDoctor(
-      Doctor.find(filter).sort({ createdAt: -1 }),
+  
+    const doctors = await Doctor.find(filter)
+      .populate("hospital")
+      .populate("department")
+      .populate("subDepartment")
+      .sort({ createdAt: -1 });
+
+   
+    const doctorsWithImages = await Promise.all(
+      doctors.map(async (doc) => {
+        const images = await DoctorImage.find({
+          doctorId: doc._id.toString(), 
+        });
+
+        return {
+          ...doc.toObject(),
+          images,
+        };
+      }),
     );
+
+    // console.log("FINAL DOCTORS:", doctorsWithImages);
+    // console.log("DOC ID:", doctors[0]._id);
+    // console.log("IMAGE COUNT:", await DoctorImage.countDocuments());
+    // console.log(
+    //   "MATCH TEST:",
+    //   await DoctorImage.find({ doctorId: doctors[0]._id }),
+    // );
 
     return res.status(200).json({
       success: true,
-      count: doctors.length,
-      doctors,
+      count: doctorsWithImages.length,
+      doctors: doctorsWithImages,
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
-
 export const getHospitalDoctors = async (req, res) => {
   try {
     const hospital = await getHospitalByUser(req.params.userId);
@@ -156,9 +245,16 @@ export const getSingleDoctor = async (req, res) => {
       });
     }
 
+    const images = await DoctorImage.find({ doctorId: doctor._id }).sort({
+      createdAt: -1,
+    });
+
     return res.status(200).json({
       success: true,
-      doctor,
+      doctor: {
+        ...doctor.toObject(),
+        images,
+      },
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -251,23 +347,56 @@ export const softDeleteDoctor = async (req, res) => {
   }
 };
 
+import mongoose from "mongoose";
+
 export const hardDeleteDoctor = async (req, res) => {
+  // Start a transaction session for safe, atomic deletion
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const doctor = await Doctor.findByIdAndDelete(req.params.id);
+    // 1. Find the doctor document first to get the associated userId
+    const doctor = await Doctor.findById(req.params.id).session(session);
 
     if (!doctor) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({
         success: false,
         message: "Doctor not found",
       });
     }
 
+    // 2. Delete the associated User record if userId exists
+    if (doctor.userId) {
+      await User.findByIdAndDelete(doctor.userId).session(session);
+    }
+
+    // 3. Delete any related Doctor Images (Clean up related assets)
+    if (typeof DoctorImage !== "undefined") {
+      await DoctorImage.deleteMany({ doctorId: doctor._id }).session(session);
+    }
+
+    // 4. Delete the Doctor record
+    await Doctor.findByIdAndDelete(req.params.id).session(session);
+
+    // Commit all operations to the database
+    await session.commitTransaction();
+    session.endSession();
+
     return res.status(200).json({
       success: true,
-      message: "Doctor permanently deleted",
+      message: "Doctor, user account, and related images permanently deleted",
       doctor,
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    // Rollback any partial database modifications if an error occurs
+    await session.abortTransaction();
+    session.endSession();
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };

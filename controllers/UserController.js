@@ -4,6 +4,7 @@ import crypto from "crypto";
 import User from "../models/UserModel.js";
 import Hospital from "../models/Hospital Model/hospitalModel.js";
 import { sendUserUpdateEmail, sendWelcomeEmail} from "../utils/mailService.js";
+import { uploadImage } from "../utils/cloudinary.js";
 
 export const signup = async (req, res) => {
   try {
@@ -115,28 +116,34 @@ export const forgotPassword = async (req, res) => {
 
 export const resetPassword = async (req, res) => {
   try {
-    const { resetToken, password } = req.body;
+    const { email, oldpassword,newpassword,copassword } = req.body;
 
-    if (!resetToken || !password) {
-      return res.status(400).json({ success: false, message: "Token and new password are required" });
+    if (!email || !oldpassword || !newpassword || !copassword) {
+      return res.status(400).json({ success: false, message: "all filed  are required" });
     }
 
-    const user = await User.findOne({
-      resetToken,
-      resetTokenExpire: { $gt: new Date() },
-    });
-
+    const user = await User.findOne({email});
+    console.log(user);
     if (!user) {
-      return res.status(400).json({ success: false, message: "Invalid or expired token" });
+      return res.status(400).json({ success: false, message: "Invalid or expired user" });
     }
-
-    user.password = await bcrypt.hash(password, 10);
-    user.resetToken = "";
-    user.resetTokenExpire = null;
-    await user.save();
+    const matchpassword= user.password;
+    const ismatch =await bcrypt.compare(oldpassword,matchpassword)
+    if(!ismatch){
+      return res.status(400).json({ success: false, message: "Invalid  password" });
+    
+    }
+    if(newpassword!==copassword){
+      return res.status(400).json({ success: false, message: "not match passwoed" });
+    
+    }
+    const chnagepassword = await bcrypt.hash(newpassword, 10);
+    console.log(chnagepassword);
+    const updatedata =await User.findOneAndUpdate({email},{password:chnagepassword});
 
     return res.status(200).json({
       success: true,
+      data:updatedata,
       message: "Password reset successfully",
     });
   } catch (error) {
@@ -185,17 +192,38 @@ export const getUser = async (req, res) => {
 
 export const updateUser = async (req, res) => {
   try {
-    const { name, email, status, phone } = req.body;
+    const { name, email, status, phone, profileImage, backgroundImage } = req.body;
+    const updateData = {
+      name,
+      email,
+      status,
+      phone,
+    };
+
+    if (profileImage && profileImage.startsWith("data:image")) {
+      const upload = await uploadImage(profileImage, "hms/users/profile");
+
+      if (!upload.success) {
+        throw new Error(upload.message || "Profile image upload failed");
+      }
+
+      updateData.profileImage = upload.url;
+    }
+
+    if (backgroundImage && backgroundImage.startsWith("data:image")) {
+      const upload = await uploadImage(backgroundImage, "hms/users/background");
+
+      if (!upload.success) {
+        throw new Error(upload.message || "Background image upload failed");
+      }
+
+      updateData.backgroundImage = upload.url;
+    }
 
     // user update
     const user = await User.findByIdAndUpdate(
       req.params.id,
-      {
-        name,
-        email,
-        status,
-        phone,
-      },
+      updateData,
       {
         new: true,
         runValidators: true,
